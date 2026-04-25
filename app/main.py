@@ -94,18 +94,13 @@ def top_productos(limite: int = 10) -> dict:
 # 🚀 APP MCP (SSE)
 # =========================
 
-app = mcp.sse_app()
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 app = mcp.sse_app()
 
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=[
-        "mcp.globallearningxxi.com",
-        "mcpibmi-mcpibmi.iquaew.easypanel.host",
-        "*",
-    ],
+    allowed_hosts=["*"],
 )
 
 # =========================
