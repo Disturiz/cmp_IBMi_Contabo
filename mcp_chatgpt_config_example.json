@@ -1,0 +1,24 @@
+{
+  "app_name": "IBM i VENTAPF MCP",
+  "description": "Consulta de solo lectura a la tabla VENTAPF en IBM i PUB400.",
+  "server_url": "https://TU-DOMINIO-PUBLICO/sse/",
+  "authentication": {
+    "mode": "none",
+    "note": "Solo para laboratorio. En entornos reales usa OAuth o una puerta de enlace segura."
+  },
+  "recommended_tools": [
+    "ping_ibmi",
+    "obtener_columnas",
+    "ver_muestras",
+    "total_registros",
+    "ventas_por_filtros",
+    "top_productos"
+  ],
+  "sample_prompts": [
+    "Valida conexión con IBM i",
+    "Muéstrame las columnas de la tabla VENTAPF",
+    "Dame 10 registros de muestra",
+    "Busca ventas del cliente CARLOS",
+    "Top 5 productos"
+  ]
+}

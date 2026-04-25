@@ -1,0 +1,8 @@
+fastapi
+fastmcp
+jaydebeapi
+JPype1
+python-dotenv
+pydantic
+uvicorn
+mcp
