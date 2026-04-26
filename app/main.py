@@ -15,6 +15,7 @@ import logging
 import os
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 # 🔥 IMPORT CORREGIDO
 from app.tools import (
@@ -41,6 +42,11 @@ mcp = FastMCP(
         "No se permite modificar datos."
     ),
     json_response=True,
+    host="0.0.0.0",
+    port=8000,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
 )
 
 # =========================
@@ -94,14 +100,8 @@ def top_productos(limite: int = 10) -> dict:
 # 🚀 APP MCP (SSE)
 # =========================
 
-from starlette.middleware.trustedhost import TrustedHostMiddleware
-
 app = mcp.sse_app()
 
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"],
-)
 
 # =========================
 # ▶️ EJECUCIÓN LOCAL
