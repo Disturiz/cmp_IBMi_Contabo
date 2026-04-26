@@ -96,6 +96,11 @@ def top_productos(limite: int = 10) -> dict:
     return resumen_por_producto(limite=limite)
 
 
+@mcp.tool()
+def ventas_por_country() -> dict:
+    return ventas_por_pais()
+
+
 # =========================
 # 🚀 APP MCP (SSE)
 # =========================

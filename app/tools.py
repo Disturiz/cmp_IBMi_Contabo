@@ -162,3 +162,13 @@ def resumen_por_producto(limite: int = 10) -> dict[str, Any]:
         "total": len(rows),
         "rows": rows,
     }
+
+
+def ventas_por_pais():
+    query = """
+        SELECT COUNTRY, SUM(TOTALREV) AS TOTAL_VENTAS
+        FROM VENTAPF
+        GROUP BY COUNTRY
+        ORDER BY TOTAL_VENTAS DESC
+    """
+    return ejecutar_query(query)
