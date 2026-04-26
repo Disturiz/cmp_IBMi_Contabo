@@ -1,5 +1,5 @@
 """
-Herramientas de negocio read-only para la tabla VENTAPF.
+Herramientas de negocio read-only para la tabla VENTASPF.
 """
 
 from __future__ import annotations
@@ -165,10 +165,43 @@ def resumen_por_producto(limite: int = 10) -> dict[str, Any]:
 
 
 def ventas_por_pais():
-    query = """
+    sql = f"""
         SELECT COUNTRY, SUM(TOTALREV) AS TOTAL_VENTAS
         FROM VENTAPF
         GROUP BY COUNTRY
         ORDER BY TOTAL_VENTAS DESC
     """
-    return ejecutar_query(query)
+
+    return execute_query(sql)
+
+
+def ejecutar_sql_select(sql: str, limite: int = 100) -> dict:
+    sql_clean = sql.strip().rstrip(";")
+
+    prohibidas = [
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "ALTER",
+        "CREATE",
+        "TRUNCATE",
+        "MERGE",
+        "CALL",
+        "GRANT",
+        "REVOKE",
+    ]
+
+    sql_upper = sql_clean.upper()
+
+    if not sql_upper.startswith("SELECT"):
+        return {"ok": False, "error": "Solo se permiten consultas SELECT"}
+
+    for palabra in prohibidas:
+        if palabra in sql_upper:
+            return {"ok": False, "error": f"Consulta no permitida: contiene {palabra}"}
+
+    if "FETCH FIRST" not in sql_upper and "LIMIT" not in sql_upper:
+        sql_clean = f"{sql_clean} FETCH FIRST {limite} ROWS ONLY"
+
+    return execute_query(sql_clean)

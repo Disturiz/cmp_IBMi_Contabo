@@ -21,6 +21,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from app.tools import (
     contar_registros,
     consultar_ventas,
+    ejecutar_sql_select,
     healthcheck,
     listar_columnas,
     listar_muestras,
@@ -99,6 +100,16 @@ def top_productos(limite: int = 10) -> dict:
 @mcp.tool()
 def ventas_por_country() -> dict:
     return ventas_por_pais()
+
+
+@mcp.tool()
+def consultar_sql(sql: str, limite: int = 100) -> dict:
+    """
+    Ejecuta consultas SQL SELECT de solo lectura sobre IBM i.
+    Usa la tabla GLEARN211.VENTAPF.
+    No permite modificaciones de datos.
+    """
+    return ejecutar_sql_select(sql=sql, limite=limite)
 
 
 # =========================
