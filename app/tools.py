@@ -147,11 +147,11 @@ def resumen_por_producto(limite: int = 10) -> dict[str, Any]:
 
     sql = f"""
         SELECT
-            {producto_col} AS PRODUCTO,
-            COUNT(*) AS CANTIDAD
-        FROM {_qualified_table()}
-        GROUP BY {producto_col}
-        ORDER BY CANTIDAD DESC
+            PRODUCT,
+            SUM(TOTALREV) AS TOTAL_INGRESO
+        FROM {TABLE_NAME}
+        GROUP BY PRODUCT
+        ORDER BY TOTAL_INGRESO DESC
         FETCH FIRST {limite} ROWS ONLY
     """
 
