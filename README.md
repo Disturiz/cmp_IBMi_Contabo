@@ -210,3 +210,4 @@ Este proyecto incluye un archivo `mcp_chatgpt_config_example.json` con valores d
 - agregar tool de metadata de tabla
 - agregar caché de columnas para validación más fuerte
 - agregar compatibilidad `search/fetch` si después quieres usarlo también con flujos de investigación sobre documentos/datos indexados
+force rebuild v2
