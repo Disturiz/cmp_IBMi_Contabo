@@ -205,3 +205,53 @@ def ejecutar_sql_select(sql: str, limite: int = 100) -> dict:
         sql_clean = f"{sql_clean} FETCH FIRST {limite} ROWS ONLY"
 
     return execute_query(sql_clean)
+
+
+def top_productos_por_zona(anio: int = 2025) -> dict[str, Any]:
+    """
+    Devuelve el producto con mayor TOTALREV por cada SALESZONE para un año dado.
+    Usa SQL simple compatible con IBM i y resuelve el ranking en Python.
+    """
+    sql = f"""
+        SELECT
+            SALESZONE,
+            PRODUCT,
+            SUM(TOTALREV) AS TOTAL_VENTAS,
+            SUM(QTY) AS TOTAL_QTY,
+            SUM(TOTALCOST) AS TOTAL_COSTO,
+            SUM(TOTALREV - TOTALCOST) AS MARGEN
+        FROM {_qualified_table()}
+        WHERE YEAR(ORDERDATE) = ?
+        GROUP BY SALESZONE, PRODUCT
+        ORDER BY SALESZONE, TOTAL_VENTAS DESC
+    """
+
+    rows = execute_query(sql, [anio])
+
+    mejores_por_zona: dict[str, dict[str, Any]] = {}
+
+    for row in rows:
+        zona = str(row.get("SALESZONE", "")).strip()
+        producto = str(row.get("PRODUCT", "")).strip()
+
+        total_ventas = float(row.get("TOTAL_VENTAS") or 0)
+        total_qty = int(row.get("TOTAL_QTY") or 0)
+        total_costo = float(row.get("TOTAL_COSTO") or 0)
+        margen = float(row.get("MARGEN") or 0)
+
+        if zona not in mejores_por_zona:
+            mejores_por_zona[zona] = {
+                "SALESZONE": zona,
+                "PRODUCT": producto,
+                "TOTAL_VENTAS": round(total_ventas, 2),
+                "TOTAL_QTY": total_qty,
+                "TOTAL_COSTO": round(total_costo, 2),
+                "MARGEN": round(margen, 2),
+            }
+
+    return {
+        "ok": True,
+        "anio": anio,
+        "total_zonas": len(mejores_por_zona),
+        "rows": list(mejores_por_zona.values()),
+    }

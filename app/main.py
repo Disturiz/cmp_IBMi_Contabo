@@ -26,6 +26,7 @@ from app.tools import (
     listar_columnas,
     listar_muestras,
     resumen_por_producto,
+    top_productos_por_zona,
 )
 
 logging.basicConfig(
@@ -110,6 +111,14 @@ def consultar_sql(sql: str, limite: int = 100) -> dict:
     No permite modificaciones de datos.
     """
     return ejecutar_sql_select(sql=sql, limite=limite)
+
+
+@mcp.tool()
+def top_productos_zona(anio: int = 2025) -> dict:
+    """
+    Devuelve el producto con mayor ingreso por cada zona de ventas para un año.
+    """
+    return top_productos_por_zona(anio=anio)
 
 
 # =========================
