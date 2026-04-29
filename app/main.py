@@ -1,12 +1,14 @@
 """
-Servidor MCP remoto para consultar la tabla VENTAPF en IBM i (PUB400).
+Servidor MCP remoto para consultar la tabla VENTASPF en IBM i (PUB400).
 
 Ejecución:
     python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-Luego usa:
-    http://localhost:8000/sse
-en ChatGPT Desktop
+Endpoint MCP SSE:
+    https://mcp.globallearningxxi.com/sse
+
+Endpoint REST Dashboard:
+    https://mcp.globallearningxxi.com/api/dashboard?anio=2025
 """
 
 from __future__ import annotations
@@ -16,18 +18,19 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.responses import JSONResponse
 
-# 🔥 IMPORT CORREGIDO
 from app.tools import (
     contar_registros,
     consultar_ventas,
+    dashboard_ventas,
     ejecutar_sql_select,
     healthcheck,
     listar_columnas,
     listar_muestras,
     resumen_por_producto,
     top_productos_por_zona,
-    dashboard_ventas,
+    ventas_por_pais,
 )
 
 logging.basicConfig(
@@ -36,11 +39,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp_ibmi_ventapf")
 
-# Inicialización MCP
+
 mcp = FastMCP(
     "IBM i VENTAPF MCP",
     instructions=(
-        "Servidor MCP de solo lectura para consultar la tabla VENTAPF en IBM i PUB400. "
+        "Servidor MCP de solo lectura para consultar la tabla VENTASPF en IBM i PUB400. "
         "Usa healthcheck o listar_columnas para validar la estructura. "
         "No se permite modificar datos."
     ),
@@ -51,10 +54,6 @@ mcp = FastMCP(
         enable_dns_rebinding_protection=False,
     ),
 )
-
-# =========================
-# 🔧 TOOLS MCP
-# =========================
 
 
 @mcp.tool()
@@ -108,7 +107,7 @@ def ventas_por_country() -> dict:
 def consultar_sql(sql: str, limite: int = 100) -> dict:
     """
     Ejecuta consultas SQL SELECT de solo lectura sobre IBM i.
-    Usa la tabla GLEARN211.VENTAPF.
+    Usa la tabla GLEARN211.VENTASPF.
     No permite modificaciones de datos.
     """
     return ejecutar_sql_select(sql=sql, limite=limite)
@@ -131,20 +130,52 @@ def dashboard_completo(anio: int | None = None) -> dict:
     return dashboard_ventas(anio=anio)
 
 
-# =========================
-# 🚀 APP MCP (SSE)
-# =========================
-
 app = mcp.sse_app()
 
 
-# =========================
-# ▶️ EJECUCIÓN LOCAL
-# =========================
+@app.route("/")
+async def root(request):
+    return JSONResponse(
+        {
+            "ok": True,
+            "service": "IBM i VENTASPF MCP",
+            "mcp_sse": "/sse",
+            "dashboard_api": "/api/dashboard?anio=2025",
+        }
+    )
+
+
+@app.route("/api/dashboard")
+async def api_dashboard(request):
+    """
+    Endpoint REST para que Streamlit pueda consumir el dashboard como JSON.
+
+    Ejemplo:
+        https://mcp.globallearningxxi.com/api/dashboard?anio=2025
+    """
+    anio_param = request.query_params.get("anio")
+
+    try:
+        anio = int(anio_param) if anio_param else None
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": "El parámetro 'anio' debe ser numérico."},
+            status_code=400,
+        )
+
+    try:
+        return JSONResponse(dashboard_ventas(anio=anio))
+    except Exception as exc:
+        logger.exception("Error generando dashboard REST")
+        return JSONResponse(
+            {"ok": False, "error": str(exc)},
+            status_code=500,
+        )
+
 
 if __name__ == "__main__":
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8000"))
 
-    logger.info(f"Iniciando MCP en {host}:{port}")
+    logger.info("Iniciando MCP en %s:%s", host, port)
     mcp.run(transport="sse", host=host, port=port)
