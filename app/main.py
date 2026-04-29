@@ -133,8 +133,10 @@ def dashboard_completo(anio: int | None = None) -> dict:
 app = mcp.sse_app()
 
 
-@app.route("/")
-async def root(request):
+from starlette.requests import Request
+
+
+async def root(request: Request):
     return JSONResponse(
         {
             "ok": True,
@@ -143,6 +145,9 @@ async def root(request):
             "dashboard_api": "/api/dashboard?anio=2025",
         }
     )
+
+
+app.add_route("/", root)
 
 
 @app.route("/api/dashboard")

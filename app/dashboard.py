@@ -1,168 +1,178 @@
-import requests
-import streamlit as st
-import pandas as pd
+"""
+Servidor MCP remoto para consultar la tabla VENTASPF en IBM i (PUB400).
 
-st.set_page_config(
-    page_title="Dashboard Ventas IBM i",
-    layout="wide",
+Ejecución:
+    python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+Endpoint MCP SSE:
+    https://mcp.globallearningxxi.com/sse
+
+Endpoint REST Dashboard:
+    https://mcp.globallearningxxi.com/api/dashboard?anio=2025
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+from starlette.responses import JSONResponse
+
+from app.tools import (
+    contar_registros,
+    consultar_ventas,
+    dashboard_ventas,
+    ejecutar_sql_select,
+    healthcheck,
+    listar_columnas,
+    listar_muestras,
+    resumen_por_producto,
+    top_productos_por_zona,
+    ventas_por_pais,
 )
 
-st.title("馃搳 Dashboard Anal铆tico de Ventas IBM i")
-
-DEFAULT_API_URL = "https://mcp.globallearningxxi.com/api/dashboard"
-
-with st.sidebar:
-    st.header("Filtros")
-    anio = st.selectbox("A帽o", [2025, 2024, 2026, "Todos"], index=0)
-    api_url = st.text_input("API Dashboard", DEFAULT_API_URL)
-
-params = {}
-if anio != "Todos":
-    params["anio"] = int(anio)
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("mcp_ibmi_ventapf")
 
 
-@st.cache_data(ttl=300)
-def cargar_dashboard(url: str, params: dict) -> dict:
-    response = requests.get(url, params=params, timeout=30)
+mcp = FastMCP(
+    "IBM i VENTAPF MCP",
+    instructions=(
+        "Servidor MCP de solo lectura para consultar la tabla VENTASPF en IBM i PUB400. "
+        "Usa healthcheck o listar_columnas para validar la estructura. "
+        "No se permite modificar datos."
+    ),
+    json_response=True,
+    host="0.0.0.0",
+    port=8000,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
+)
 
-    content_type = response.headers.get("content-type", "")
 
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"API respondi贸 HTTP {response.status_code}: {response.text[:500]}"
+@mcp.tool()
+def ping_ibmi() -> dict:
+    return healthcheck()
+
+
+@mcp.tool()
+def obtener_columnas() -> dict:
+    return listar_columnas()
+
+
+@mcp.tool()
+def ver_muestras(limite: int = 5) -> dict:
+    return listar_muestras(limite=limite)
+
+
+@mcp.tool()
+def total_registros() -> dict:
+    return contar_registros()
+
+
+@mcp.tool()
+def ventas_por_filtros(
+    limite: int = 20,
+    cliente: str | None = None,
+    producto: str | None = None,
+    order_by: str | None = None,
+    descending: bool = True,
+) -> dict:
+    return consultar_ventas(
+        limite=limite,
+        cliente=cliente,
+        producto=producto,
+        order_by=order_by,
+        descending=descending,
+    )
+
+
+@mcp.tool()
+def top_productos(limite: int = 10) -> dict:
+    return resumen_por_producto(limite=limite)
+
+
+@mcp.tool()
+def ventas_por_country() -> dict:
+    return ventas_por_pais()
+
+
+@mcp.tool()
+def consultar_sql(sql: str, limite: int = 100) -> dict:
+    """
+    Ejecuta consultas SQL SELECT de solo lectura sobre IBM i.
+    Usa la tabla GLEARN211.VENTASPF.
+    No permite modificaciones de datos.
+    """
+    return ejecutar_sql_select(sql=sql, limite=limite)
+
+
+@mcp.tool()
+def top_productos_zona(anio: int = 2025) -> dict:
+    """
+    Devuelve el producto con mayor ingreso por cada zona de ventas para un año.
+    """
+    return top_productos_por_zona(anio=anio)
+
+
+@mcp.tool()
+def dashboard_completo(anio: int | None = None) -> dict:
+    """
+    Genera un dashboard completo de ventas con KPIs, zonas, países,
+    productos, margen y evolución mensual.
+    """
+    return dashboard_ventas(anio=anio)
+
+
+app = mcp.sse_app()
+
+
+@app.route("/")
+async def root(request):
+    return JSONResponse(
+        {
+            "ok": True,
+            "service": "IBM i VENTASPF MCP",
+            "mcp_sse": "/sse",
+            "dashboard_api": "/api/dashboard?anio=2025",
+        }
+    )
+
+
+from starlette.requests import Request
+
+
+async def api_dashboard(request: Request):
+    anio_param = request.query_params.get("anio")
+
+    try:
+        anio = int(anio_param) if anio_param else None
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": "El parámetro 'anio' debe ser numérico."},
+            status_code=400,
         )
 
-    if "application/json" not in content_type.lower():
-        raise RuntimeError(
-            "La API no devolvi贸 JSON. "
-            f"Content-Type recibido: {content_type}. "
-            f"Respuesta inicial: {response.text[:300]}"
+    try:
+        return JSONResponse({"ok": True, **dashboard_ventas(anio=anio)})
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": str(exc)},
+            status_code=500,
         )
 
-    return response.json()
 
+app.add_route("/api/dashboard", api_dashboard)
 
-try:
-    data = cargar_dashboard(api_url, params)
-except Exception as exc:
-    st.error("No se pudo cargar el dashboard desde la API REST.")
-    st.exception(exc)
-    st.stop()
+if __name__ == "__main__":
+    host = os.getenv("MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("MCP_PORT", "8000"))
 
-if not data.get("ok", False):
-    st.error(data.get("error", "La API devolvi贸 una respuesta no exitosa."))
-    st.json(data)
-    st.stop()
-
-
-kpis = data.get("kpis", {})
-zonas = pd.DataFrame(data.get("ventas_por_zona", []))
-paises = pd.DataFrame(data.get("ventas_por_pais", []))
-productos = pd.DataFrame(data.get("top_productos", []))
-margen_producto = pd.DataFrame(data.get("margen_por_producto", []))
-mensual = pd.DataFrame(data.get("evolucion_mensual", []))
-
-
-def limpiar_texto_df(df: pd.DataFrame) -> pd.DataFrame:
-    for col in df.select_dtypes(include=["object"]).columns:
-        df[col] = df[col].astype(str).str.strip()
-    return df
-
-
-zonas = limpiar_texto_df(zonas)
-paises = limpiar_texto_df(paises)
-productos = limpiar_texto_df(productos)
-margen_producto = limpiar_texto_df(margen_producto)
-mensual = limpiar_texto_df(mensual)
-
-
-col1, col2, col3, col4, col5 = st.columns(5)
-
-col1.metric("馃挵 Ventas", f"{kpis.get('TOTAL_VENTAS', 0):,.2f}")
-col2.metric("馃捀 Costo", f"{kpis.get('TOTAL_COSTO', 0):,.2f}")
-col3.metric("馃搱 Margen", f"{kpis.get('MARGEN', 0):,.2f}")
-col4.metric("馃摝 Unidades", f"{kpis.get('UNIDADES', 0):,.0f}")
-col5.metric("馃Ь Ticket Prom.", f"{kpis.get('TICKET_PROMEDIO', 0):,.2f}")
-
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("Ingresos por Zona")
-    if not zonas.empty:
-        st.bar_chart(zonas.set_index("SALESZONE")["TOTAL_VENTAS"])
-    else:
-        st.info("No hay datos de ventas por zona.")
-
-with col2:
-    st.subheader("Ingresos por Pa铆s")
-    if not paises.empty:
-        st.bar_chart(paises.set_index("COUNTRY")["TOTAL_VENTAS"])
-    else:
-        st.info("No hay datos de ventas por pa铆s.")
-
-
-col3, col4 = st.columns(2)
-
-with col3:
-    st.subheader("Top Productos por Ventas")
-    if not productos.empty:
-        st.bar_chart(productos.set_index("PRODUCT")["TOTAL_VENTAS"])
-    else:
-        st.info("No hay datos de productos.")
-
-with col4:
-    st.subheader("Margen por Producto")
-    if not margen_producto.empty:
-        st.bar_chart(margen_producto.set_index("PRODUCT")["MARGEN"])
-    else:
-        st.info("No hay datos de margen por producto.")
-
-
-st.subheader("Evoluci贸n Mensual")
-
-if not mensual.empty:
-    mensual["PERIODO"] = (
-        mensual["ANIO"].astype(str) + "-" + mensual["MES"].astype(str).str.zfill(2)
-    )
-    st.line_chart(mensual.set_index("PERIODO")[["TOTAL_VENTAS", "MARGEN"]])
-else:
-    st.info("No hay datos de evoluci贸n mensual.")
-
-
-st.subheader("Detalle - Top Productos")
-st.dataframe(productos, use_container_width=True)
-
-st.subheader("Detalle - Evoluci贸n Mensual")
-st.dataframe(mensual, use_container_width=True)
-
-
-st.subheader("馃 Insights autom谩ticos")
-
-if not zonas.empty:
-    zona_top = zonas.iloc[0]
-    st.write(
-        f"鉁?La zona con mayor ingreso es **{zona_top['SALESZONE']}** "
-        f"con **{zona_top['TOTAL_VENTAS']:,.2f}**."
-    )
-
-if not paises.empty:
-    pais_top = paises.iloc[0]
-    st.write(
-        f"鉁?El pa铆s con mayor ingreso es **{pais_top['COUNTRY']}** "
-        f"con **{pais_top['TOTAL_VENTAS']:,.2f}**."
-    )
-
-if not productos.empty:
-    prod_top = productos.iloc[0]
-    st.write(
-        f"鉁?El producto l铆der es **{prod_top['PRODUCT']}** "
-        f"con **{prod_top['TOTAL_VENTAS']:,.2f}** en ventas."
-    )
-
-if not mensual.empty:
-    mejor_mes = mensual.sort_values("TOTAL_VENTAS", ascending=False).iloc[0]
-    st.write(
-        f"鉁?El mejor mes fue **{int(mejor_mes['MES'])}/{int(mejor_mes['ANIO'])}** "
-        f"con **{mejor_mes['TOTAL_VENTAS']:,.2f}** en ventas."
-    )
+    logger.info("Iniciando MCP en %s:%s", host, port)
+    mcp.run(transport="sse", host=host, port=port)
