@@ -1,9 +1,6 @@
 """
 Servidor MCP remoto para consultar la tabla VENTASPF en IBM i (PUB400).
 
-Ejecución:
-    python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-
 Endpoint MCP SSE:
     https://mcp.globallearningxxi.com/sse
 
@@ -18,6 +15,7 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.tools import (
@@ -38,7 +36,6 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 logger = logging.getLogger("mcp_ibmi_ventapf")
-
 
 mcp = FastMCP(
     "IBM i VENTAPF MCP",
@@ -133,9 +130,6 @@ def dashboard_completo(anio: int | None = None) -> dict:
 app = mcp.sse_app()
 
 
-from starlette.requests import Request
-
-
 async def root(request: Request):
     return JSONResponse(
         {
@@ -147,16 +141,10 @@ async def root(request: Request):
     )
 
 
-app.add_route("/", root)
-
-
-@app.route("/api/dashboard")
-async def api_dashboard(request):
+async def api_dashboard(request: Request):
     """
     Endpoint REST para que Streamlit pueda consumir el dashboard como JSON.
-
-    Ejemplo:
-        https://mcp.globallearningxxi.com/api/dashboard?anio=2025
+    No usar @app.route porque app es Starlette. Usar app.add_route.
     """
     anio_param = request.query_params.get("anio")
 
@@ -169,7 +157,11 @@ async def api_dashboard(request):
         )
 
     try:
-        return JSONResponse(dashboard_ventas(anio=anio))
+        data = dashboard_ventas(anio=anio)
+        if isinstance(data, dict):
+            data["ok"] = data.get("ok", True)
+            return JSONResponse(data)
+        return JSONResponse({"ok": True, "data": data})
     except Exception as exc:
         logger.exception("Error generando dashboard REST")
         return JSONResponse(
@@ -178,9 +170,12 @@ async def api_dashboard(request):
         )
 
 
+app.add_route("/", root, methods=["GET"])
+app.add_route("/api/dashboard", api_dashboard, methods=["GET"])
+
+
 if __name__ == "__main__":
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8000"))
-
     logger.info("Iniciando MCP en %s:%s", host, port)
     mcp.run(transport="sse", host=host, port=port)
