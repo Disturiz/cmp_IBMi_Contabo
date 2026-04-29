@@ -255,3 +255,99 @@ def top_productos_por_zona(anio: int = 2025) -> dict[str, Any]:
         "total_zonas": len(mejores_por_zona),
         "rows": list(mejores_por_zona.values()),
     }
+
+
+def dashboard_ventas(anio: int | None = None) -> dict[str, Any]:
+    where = ""
+    params = []
+
+    if anio:
+        where = "WHERE YEAR(ORDERDATE) = ?"
+        params.append(anio)
+
+    kpis = execute_query(
+        f"""
+        SELECT
+            SUM(TOTALREV) AS TOTAL_VENTAS,
+            SUM(TOTALCOST) AS TOTAL_COSTO,
+            SUM(TOTALREV - TOTALCOST) AS MARGEN,
+            SUM(QTY) AS UNIDADES,
+            DECIMAL(SUM(TOTALREV) / NULLIF(SUM(QTY), 0), 15, 2) AS TICKET_PROMEDIO
+        FROM {_qualified_table()}
+        {where}
+    """,
+        params,
+    )
+
+    ventas_zona = execute_query(
+        f"""
+        SELECT SALESZONE, SUM(TOTALREV) AS TOTAL_VENTAS
+        FROM {_qualified_table()}
+        {where}
+        GROUP BY SALESZONE
+        ORDER BY TOTAL_VENTAS DESC
+    """,
+        params,
+    )
+
+    ventas_pais = execute_query(
+        f"""
+        SELECT COUNTRY, SUM(TOTALREV) AS TOTAL_VENTAS
+        FROM {_qualified_table()}
+        {where}
+        GROUP BY COUNTRY
+        ORDER BY TOTAL_VENTAS DESC
+    """,
+        params,
+    )
+
+    top_productos = execute_query(
+        f"""
+        SELECT PRODUCT, SUM(TOTALREV) AS TOTAL_VENTAS, SUM(QTY) AS UNIDADES
+        FROM {_qualified_table()}
+        {where}
+        GROUP BY PRODUCT
+        ORDER BY TOTAL_VENTAS DESC
+        FETCH FIRST 10 ROWS ONLY
+    """,
+        params,
+    )
+
+    margen_producto = execute_query(
+        f"""
+        SELECT PRODUCT, SUM(TOTALREV - TOTALCOST) AS MARGEN
+        FROM {_qualified_table()}
+        {where}
+        GROUP BY PRODUCT
+        ORDER BY MARGEN DESC
+        FETCH FIRST 10 ROWS ONLY
+    """,
+        params,
+    )
+
+    mensual = execute_query(
+        f"""
+        SELECT
+            YEAR(ORDERDATE) AS ANIO,
+            MONTH(ORDERDATE) AS MES,
+            SUM(TOTALREV) AS TOTAL_VENTAS,
+            SUM(TOTALREV - TOTALCOST) AS MARGEN,
+            SUM(QTY) AS UNIDADES
+        FROM {_qualified_table()}
+        {where}
+        GROUP BY YEAR(ORDERDATE), MONTH(ORDERDATE)
+        ORDER BY ANIO, MES
+    """,
+        params,
+    )
+
+    return {
+        "ok": True,
+        "anio": anio,
+        "kpis": kpis[0] if kpis else {},
+        "ventas_por_zona": ventas_zona,
+        "ventas_por_pais": ventas_pais,
+        "top_productos": top_productos,
+        "margen_por_producto": margen_producto,
+        "evolucion_mensual": mensual,
+    }

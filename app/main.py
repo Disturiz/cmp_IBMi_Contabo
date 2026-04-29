@@ -27,6 +27,7 @@ from app.tools import (
     listar_muestras,
     resumen_por_producto,
     top_productos_por_zona,
+    dashboard_ventas,
 )
 
 logging.basicConfig(
@@ -119,6 +120,15 @@ def top_productos_zona(anio: int = 2025) -> dict:
     Devuelve el producto con mayor ingreso por cada zona de ventas para un año.
     """
     return top_productos_por_zona(anio=anio)
+
+
+@mcp.tool()
+def dashboard_completo(anio: int | None = None) -> dict:
+    """
+    Genera un dashboard completo de ventas con KPIs, zonas, países,
+    productos, margen y evolución mensual.
+    """
+    return dashboard_ventas(anio=anio)
 
 
 # =========================
