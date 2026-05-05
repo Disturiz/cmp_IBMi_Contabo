@@ -143,13 +143,11 @@ def consultar_ventas(
 def resumen_por_producto(limite: int = 10) -> dict[str, Any]:
     limite = _safe_limit(limite, max_value=100)
 
-    producto_col = _validate_identifier(PRODUCT_COLUMN)
-
     sql = f"""
         SELECT
             PRODUCT,
             SUM(TOTALREV) AS TOTAL_INGRESO
-        FROM {TABLE_NAME}
+        FROM {_qualified_table()}
         GROUP BY PRODUCT
         ORDER BY TOTAL_INGRESO DESC
         FETCH FIRST {limite} ROWS ONLY
@@ -167,12 +165,18 @@ def resumen_por_producto(limite: int = 10) -> dict[str, Any]:
 def ventas_por_pais():
     sql = f"""
         SELECT COUNTRY, SUM(TOTALREV) AS TOTAL_VENTAS
-        FROM VENTAPF
+        FROM {_qualified_table()}
         GROUP BY COUNTRY
         ORDER BY TOTAL_VENTAS DESC
     """
 
-    return execute_query(sql)
+    rows = execute_query(sql)
+
+    return {
+        "ok": True,
+        "total": len(rows),
+        "rows": rows,
+    }
 
 
 def ejecutar_sql_select(sql: str, limite: int = 100) -> dict:
@@ -204,7 +208,13 @@ def ejecutar_sql_select(sql: str, limite: int = 100) -> dict:
     if "FETCH FIRST" not in sql_upper and "LIMIT" not in sql_upper:
         sql_clean = f"{sql_clean} FETCH FIRST {limite} ROWS ONLY"
 
-    return execute_query(sql_clean)
+    rows = execute_query(sql_clean)
+
+    return {
+        "ok": True,
+        "total": len(rows),
+        "rows": rows,
+    }
 
 
 def top_productos_por_zona(anio: int = 2025) -> dict[str, Any]:

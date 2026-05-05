@@ -179,3 +179,7 @@ if __name__ == "__main__":
     port = int(os.getenv("MCP_PORT", "8000"))
     logger.info("Iniciando MCP en %s:%s", host, port)
     mcp.run(transport="sse", host=host, port=port)
+
+# if __name__ == "__main__":
+#    logger.info("Iniciando MCP por STDIO")
+#    mcp.run()
